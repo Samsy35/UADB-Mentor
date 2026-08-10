@@ -1,16 +1,19 @@
 import { type ReactNode, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
-  LayoutDashboard, Search, Calendar, MessageSquare,
+  LayoutDashboard, Search, Calendar, MessageSquare, BookMarked, Bell,
   User, LogOut, Menu, X, ShieldCheck, ChevronDown,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { Avatar } from '@/components/Avatar';
 import { UADBLogo } from '@/components/UADBLogo';
+import NotificationBell from '@/components/NotificationBell';
+import { useNotifications } from '@/context/NotificationContext';
 
 export default function AppLayout({ children }: { children: ReactNode }) {
   const { profile, signOut } = useAuth();
   const navigate = useNavigate();
+  const { unread } = useNotifications();
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const handleSignOut = async () => {
@@ -18,11 +21,13 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     navigate('/login');
   };
 
-  const navItems: { to: string; icon: React.ElementType; label: string; end: boolean }[] = [
+  const navItems: { to: string; icon: React.ElementType; label: string; end: boolean; badge?: number }[] = [
     { to: '/app', icon: LayoutDashboard, label: 'Tableau de bord', end: true },
     { to: '/app/mentors', icon: Search, label: 'Trouver un mentor', end: false },
     { to: '/app/sessions', icon: Calendar, label: 'Mes sessions', end: false },
+    { to: '/app/ressources', icon: BookMarked, label: 'Ressources', end: false },
     { to: '/app/messages', icon: MessageSquare, label: 'Messagerie', end: false },
+    { to: '/app/notifications', icon: Bell, label: 'Notifications', end: false, badge: unread },
     { to: '/app/profile', icon: User, label: 'Mon profil', end: false },
   ];
 
@@ -63,7 +68,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               }
             >
               <item.icon className="w-5 h-5" />
-              {item.label}
+              <span className="flex-1">{item.label}</span>
+              {item.badge ? <span className="bg-error-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">{item.badge}</span> : null}
             </NavLink>
           ))}
           {validationBadge()}
@@ -78,9 +84,12 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           <UADBLogo size={32} />
           <span className="font-bold text-slate-900">MentorUADB</span>
         </div>
-        <button onClick={() => setMobileOpen(true)} className="p-2 rounded-lg hover:bg-slate-100">
-          <Menu className="w-5 h-5 text-slate-600" />
-        </button>
+        <div className="flex items-center gap-1">
+          <NotificationBell />
+          <button onClick={() => setMobileOpen(true)} aria-label="Ouvrir le menu" className="p-2 rounded-lg hover:bg-slate-100">
+            <Menu className="w-5 h-5 text-slate-600" />
+          </button>
+        </div>
       </div>
 
       {mobileOpen && (
@@ -107,7 +116,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                   }
                 >
                   <item.icon className="w-5 h-5" />
-                  {item.label}
+                  <span className="flex-1">{item.label}</span>
+                  {item.badge ? <span className="bg-error-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">{item.badge}</span> : null}
                 </NavLink>
               ))}
               {validationBadge()}
@@ -120,6 +130,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       )}
 
       <div className="flex-1 lg:ml-64 pt-16 lg:pt-0 min-h-screen">
+        <header className="hidden lg:flex items-center justify-end gap-2 h-16 px-8 border-b border-slate-200 bg-white/80 backdrop-blur sticky top-0 z-20">
+          <NotificationBell />
+        </header>
         <main className="p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto">{children}</main>
       </div>
     </div>
