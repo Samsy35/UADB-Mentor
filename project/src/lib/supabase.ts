@@ -12,6 +12,9 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 
 export const JOURS = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
 
+export type Mode = 'en_ligne' | 'presentiel';
+export type ModePreference = Mode | 'les_deux';
+
 export type Profile = {
   id: string;
   nom: string;
@@ -26,6 +29,8 @@ export type Profile = {
   is_admin: boolean;
   statut_validation: 'en_attente' | 'valide' | 'suspendu';
   bio: string | null;
+  experience: string | null;
+  mode_preference: ModePreference;
   created_at: string;
   updated_at: string;
 };
@@ -47,7 +52,9 @@ export type Niveau = {
 export type Matiere = {
   id: string;
   nom: string;
+  code: string | null;
   filiere_id: string | null;
+  niveau_id: string | null;
   description: string | null;
 };
 
@@ -65,7 +72,7 @@ export type Disponibilite = {
   jour_semaine: number;
   heure_debut: string;
   heure_fin: string;
-  mode: 'en_ligne' | 'presentiel' | 'les_deux';
+  mode: ModePreference;
 };
 
 export type Session = {
@@ -76,7 +83,7 @@ export type Session = {
   date_session: string;
   heure_debut: string;
   heure_fin: string;
-  mode: 'en_ligne' | 'presentiel';
+  mode: Mode;
   lieu_ou_lien: string | null;
   sujet: string | null;
   statut: 'demandee' | 'acceptee' | 'refusee' | 'terminee' | 'annulee';
@@ -101,6 +108,79 @@ export type Evaluation = {
   evaluateur_id: string;
   evalue_id: string;
   note: number;
+  note_pedagogie: number | null;
+  note_ponctualite: number | null;
+  note_clarte: number | null;
+  note_disponibilite: number | null;
+  masquee: boolean;
   commentaire: string | null;
   created_at: string;
+};
+
+export type NotificationType =
+  | 'demande_recue'
+  | 'demande_acceptee'
+  | 'demande_refusee'
+  | 'session_annulee'
+  | 'session_terminee'
+  | 'nouveau_message'
+  | 'nouvelle_evaluation'
+  | 'compte_valide'
+  | 'nouvelle_ressource';
+
+export type AppNotification = {
+  id: string;
+  user_id: string;
+  type: NotificationType;
+  titre: string;
+  contenu: string | null;
+  lien: string | null;
+  lu: boolean;
+  created_at: string;
+};
+
+export type RessourceType = 'pdf' | 'exercice' | 'fiche' | 'lien' | 'cours' | 'annale' | 'correction';
+
+export type Ressource = {
+  id: string;
+  mentor_id: string;
+  matiere_id: string | null;
+  niveau_id: string | null;
+  titre: string;
+  description: string | null;
+  type: RessourceType;
+  url: string;
+  created_at: string;
+  matiere?: Matiere | null;
+  niveau?: Niveau | null;
+  mentor?: Profile | null;
+};
+
+export type CompteRendu = {
+  id: string;
+  session_id: string;
+  auteur_id: string;
+  sujet_traite: string;
+  notions_abordees: string | null;
+  difficultes: string | null;
+  exercices: string | null;
+  niveau_comprehension: number;
+  recommandations: string | null;
+  objectif_prochaine: string | null;
+  created_at: string;
+};
+
+export type MotifSignalement = 'absence' | 'comportement' | 'contenu_inapproprie' | 'faux_profil' | 'autre';
+
+export type Signalement = {
+  id: string;
+  signaleur_id: string;
+  signale_id: string;
+  session_id: string | null;
+  motif: MotifSignalement;
+  description: string | null;
+  statut: 'ouvert' | 'en_cours' | 'resolu' | 'rejete';
+  created_at: string;
+  signaleur?: Profile | null;
+  signale?: Profile | null;
 };

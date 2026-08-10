@@ -1,13 +1,16 @@
 import { useEffect, useState } from 'react';
-import { User, BookOpen, Calendar, Clock, Plus, X, Check, Phone } from 'lucide-react';
-import { supabase, type Matiere, type Filiere, type Niveau, type MentorMatiere, type Disponibilite, type Session, JOURS } from '@/lib/supabase';
+import { User, BookOpen, Calendar, Clock, Plus, X, Check, Phone, KeyRound, Star, MapPin, Video } from 'lucide-react';
+import { supabase, type Matiere, type Filiere, type Niveau, type MentorMatiere, type Disponibilite, type ModePreference, type Session, JOURS } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
-import { Card, Badge, Button, Input, Select, Textarea, Spinner, EmptyState } from '@/components/ui';
+import { useToast } from '@/context/ToastContext';
+import { Card, Badge, Button, Input, Select, Textarea, EmptyState, Modal, StarRating, CardSkeleton } from '@/components/ui';
 import { Avatar } from '@/components/Avatar';
+import { SessionStatusBadge } from '@/components/SessionStatusBadge';
 import { fetchMatieres, fetchFilieres, fetchNiveaux, formatDate, formatTime, fullName } from '@/lib/utils';
 
 export default function ProfilePage() {
   const { profile, refreshProfile } = useAuth();
+  const { notify } = useToast();
   const [editing, setEditing] = useState(false);
   const [matieres, setMatieres] = useState<Matiere[]>([]);
   const [filieres, setFilieres] = useState<Filiere[]>([]);
@@ -19,12 +22,14 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false);
   const [showAddMatiere, setShowAddMatiere] = useState(false);
   const [showAddDispo, setShowAddDispo] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [noteMoyenne, setNoteMoyenne] = useState({ moyenne: 0, nombre: 0 });
 
-  const [editForm, setEditForm] = useState({ nom: '', prenom: '', telephone: '', niveau_id: '', filiere_id: '', bio: '', photo_url: '', is_mentor: false, is_mentore: true });
+  const [editForm, setEditForm] = useState({ nom: '', prenom: '', telephone: '', niveau_id: '', filiere_id: '', bio: '', experience: '', mode_preference: 'les_deux' as ModePreference, photo_url: '', is_mentor: false, is_mentore: true });
 
   useEffect(() => {
     if (profile) {
-      setEditForm({ nom: profile.nom, prenom: profile.prenom, telephone: profile.telephone, niveau_id: profile.niveau_id ?? '', filiere_id: profile.filiere_id ?? '', bio: profile.bio ?? '', photo_url: profile.photo_url ?? '', is_mentor: profile.is_mentor, is_mentore: profile.is_mentore });
+      setEditForm({ nom: profile.nom, prenom: profile.prenom, telephone: profile.telephone, niveau_id: profile.niveau_id ?? '', filiere_id: profile.filiere_id ?? '', bio: profile.bio ?? '', experience: profile.experience ?? '', mode_preference: profile.mode_preference ?? 'les_deux', photo_url: profile.photo_url ?? '', is_mentor: profile.is_mentor, is_mentore: profile.is_mentore });
       loadMentorData();
     }
   }, [profile]);
@@ -39,15 +44,20 @@ export default function ProfilePage() {
     setMyDispos((dd ?? []) as Disponibilite[]);
     const { data: ss } = await supabase.from('sessions').select('*, matiere:matieres(*)').or(`mentor_id.eq.${profile.id},mentore_id.eq.${profile.id}`).order('date_session', { ascending: false }).limit(5);
     setMySessions((ss ?? []) as Session[]);
+    const { data: evals } = await supabase.from('evaluations').select('note').eq('evalue_id', profile.id).eq('masquee', false);
+    const notes = (evals ?? []) as { note: number }[];
+    setNoteMoyenne({ moyenne: notes.length > 0 ? notes.reduce((sum, e) => sum + e.note, 0) / notes.length : 0, nombre: notes.length });
     setLoading(false);
   };
 
   const saveProfile = async () => {
     if (!profile) return;
     setSaving(true);
-    await supabase.from('profiles').update({ nom: editForm.nom, prenom: editForm.prenom, telephone: editForm.telephone, niveau_id: editForm.niveau_id || null, filiere_id: editForm.filiere_id || null, bio: editForm.bio || null, photo_url: editForm.photo_url || null, is_mentor: editForm.is_mentor, is_mentore: editForm.is_mentore }).eq('id', profile.id);
+    const { error } = await supabase.from('profiles').update({ nom: editForm.nom, prenom: editForm.prenom, telephone: editForm.telephone, niveau_id: editForm.niveau_id || null, filiere_id: editForm.filiere_id || null, bio: editForm.bio || null, experience: editForm.experience || null, mode_preference: editForm.mode_preference, photo_url: editForm.photo_url || null, is_mentor: editForm.is_mentor, is_mentore: editForm.is_mentore }).eq('id', profile.id);
     await refreshProfile();
     setSaving(false);
+    if (error) { notify('Enregistrement impossible.', 'error'); return; }
+    notify('Profil mis à jour.', 'success');
     setEditing(false);
   };
 
@@ -56,7 +66,7 @@ export default function ProfilePage() {
   const addDispo = async (dispo: Omit<Disponibilite, 'id' | 'mentor_id' | 'created_at'>) => { if (!profile) return; await supabase.from('disponibilites').insert({ ...dispo, mentor_id: profile.id }); setShowAddDispo(false); loadMentorData(); };
   const removeDispo = async (id: string) => { await supabase.from('disponibilites').delete().eq('id', id); loadMentorData(); };
 
-  if (loading || !profile) return <div className="flex items-center justify-center py-20"><Spinner className="w-8 h-8 text-primary-600" /></div>;
+  if (loading || !profile) return <CardSkeleton count={3} />;
 
   const filiere = filieres.find((f) => f.id === profile.filiere_id);
   const niveau = niveaux.find((n) => n.id === profile.niveau_id);
@@ -65,7 +75,14 @@ export default function ProfilePage() {
     <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-slate-900">Mon profil</h1>
-        {!editing ? <Button variant="outline" onClick={() => setEditing(true)}><User className="w-4 h-4" /> Modifier</Button> : <div className="flex gap-2"><Button variant="ghost" onClick={() => setEditing(false)}>Annuler</Button><Button onClick={saveProfile} loading={saving}><Check className="w-4 h-4" /> Enregistrer</Button></div>}
+        {!editing ? (
+          <div className="flex gap-2">
+            <Button variant="ghost" onClick={() => setShowPassword(true)}><KeyRound className="w-4 h-4" /> Mot de passe</Button>
+            <Button variant="outline" onClick={() => setEditing(true)}><User className="w-4 h-4" /> Modifier</Button>
+          </div>
+        ) : (
+          <div className="flex gap-2"><Button variant="ghost" onClick={() => setEditing(false)}>Annuler</Button><Button onClick={saveProfile} loading={saving}><Check className="w-4 h-4" /> Enregistrer</Button></div>
+        )}
       </div>
 
       <Card className="p-6">
@@ -92,7 +109,16 @@ export default function ProfilePage() {
                 <div className="grid sm:grid-cols-2 gap-3 text-sm">
                   {niveau && <InfoRow label="Niveau" value={niveau.nom} />}
                   {filiere && <InfoRow label="Filière" value={filiere.nom} />}
+                  <InfoRow label="Mode d'accompagnement" value={MODE_LABELS[profile.mode_preference] ?? 'Les deux'} />
+                  {profile.experience && <InfoRow label="Expérience" value={profile.experience} />}
                 </div>
+                {profile.is_mentor && noteMoyenne.nombre > 0 && (
+                  <div className="flex items-center gap-2">
+                    <Star className="w-4 h-4 text-accent-500" />
+                    <StarRating value={noteMoyenne.moyenne} size="sm" />
+                    <span className="text-sm text-slate-500">{noteMoyenne.moyenne.toFixed(1)}/5 · {noteMoyenne.nombre} avis</span>
+                  </div>
+                )}
                 {profile.bio && <div className="pt-2"><p className="text-xs font-medium text-slate-400 uppercase mb-1">Présentation</p><p className="text-sm text-slate-700">{profile.bio}</p></div>}
                 <Badge color={profile.statut_validation === 'valide' ? 'green' : profile.statut_validation === 'en_attente' ? 'amber' : 'red'}>{profile.statut_validation === 'valide' ? 'Compte validé' : profile.statut_validation === 'en_attente' ? 'En attente de validation' : 'Compte suspendu'}</Badge>
               </>
@@ -105,6 +131,12 @@ export default function ProfilePage() {
                   <label className="flex items-center gap-2 text-sm font-medium text-slate-700"><input type="checkbox" checked={editForm.is_mentore} onChange={(e) => setEditForm({ ...editForm, is_mentore: e.target.checked })} className="w-4 h-4 rounded text-primary-600 focus:ring-primary-500" /> Mentoré</label>
                   <label className="flex items-center gap-2 text-sm font-medium text-slate-700"><input type="checkbox" checked={editForm.is_mentor} onChange={(e) => setEditForm({ ...editForm, is_mentor: e.target.checked })} className="w-4 h-4 rounded text-primary-600 focus:ring-primary-500" /> Mentor</label>
                 </div>
+                <Select label="Mode d'accompagnement préféré" value={editForm.mode_preference} onChange={(e) => setEditForm({ ...editForm, mode_preference: e.target.value as ModePreference })}>
+                  <option value="les_deux">Présentiel et en ligne</option>
+                  <option value="en_ligne">En ligne uniquement</option>
+                  <option value="presentiel">Présentiel uniquement</option>
+                </Select>
+                {editForm.is_mentor && <Textarea label="Expérience" value={editForm.experience} onChange={(e) => setEditForm({ ...editForm, experience: e.target.value })} rows={2} placeholder="Ex : 2 ans de tutorat en algorithmique, major de promo en L2" />}
                 <Textarea label="Présentation (mentor)" value={editForm.bio} onChange={(e) => setEditForm({ ...editForm, bio: e.target.value })} rows={3} />
               </div>
             )}
@@ -135,7 +167,10 @@ export default function ProfilePage() {
               <div key={d.id} className="flex items-center gap-3 p-3 rounded-xl bg-slate-50">
                 <span className="w-24 font-medium text-slate-700 text-sm">{JOURS[d.jour_semaine]}</span>
                 <span className="text-sm text-slate-600">{formatTime(d.heure_debut)} - {formatTime(d.heure_fin)}</span>
-                <Badge color={d.mode === 'en_ligne' ? 'blue' : d.mode === 'presentiel' ? 'green' : 'slate'}>{d.mode}</Badge>
+                <Badge color={d.mode === 'en_ligne' ? 'blue' : d.mode === 'presentiel' ? 'green' : 'slate'}>
+                  {d.mode === 'en_ligne' ? <Video className="w-3 h-3" /> : d.mode === 'presentiel' ? <MapPin className="w-3 h-3" /> : null}
+                  {MODE_LABELS[d.mode]}
+                </Badge>
                 <button onClick={() => removeDispo(d.id)} className="ml-auto text-slate-400 hover:text-error-500"><X className="w-4 h-4" /></button>
               </div>
             ))}</div>
@@ -149,7 +184,7 @@ export default function ProfilePage() {
           <div className="space-y-2">{mySessions.map((s) => (
             <div key={s.id} className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50">
               <div className="flex-1"><p className="text-sm font-medium text-slate-800">{s.matiere?.nom}</p><p className="text-xs text-slate-500">{formatDate(s.date_session)} · {formatTime(s.heure_debut)}</p></div>
-              <Badge color={s.statut === 'terminee' ? 'green' : s.statut === 'acceptee' ? 'blue' : s.statut === 'demandee' ? 'amber' : 'slate'}>{s.statut}</Badge>
+              <SessionStatusBadge statut={s.statut} />
             </div>
           ))}</div>
         )}
@@ -157,7 +192,48 @@ export default function ProfilePage() {
 
       {showAddMatiere && <AddMatiereModal matieres={matieres} existingIds={myMatieres.map((mm) => mm.matiere?.id).filter(Boolean) as string[]} onAdd={addMatiere} onClose={() => setShowAddMatiere(false)} />}
       {showAddDispo && <AddDispoModal onAdd={addDispo} onClose={() => setShowAddDispo(false)} />}
+      {showPassword && <ChangePasswordModal onClose={() => setShowPassword(false)} />}
     </div>
+  );
+}
+
+const MODE_LABELS: Record<string, string> = {
+  en_ligne: 'En ligne',
+  presentiel: 'Présentiel',
+  les_deux: 'Les deux',
+};
+
+function ChangePasswordModal({ onClose }: { onClose: () => void }) {
+  const { notify } = useToast();
+  const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const submit = async () => {
+    if (password.length < 8) { setError('Le mot de passe doit contenir au moins 8 caractères.'); return; }
+    if (password !== confirm) { setError('Les deux mots de passe ne correspondent pas.'); return; }
+    setSaving(true);
+    setError('');
+    const { error: err } = await supabase.auth.updateUser({ password });
+    setSaving(false);
+    if (err) { setError(err.message); return; }
+    notify('Mot de passe modifié.', 'success');
+    onClose();
+  };
+
+  return (
+    <Modal title="Changer mon mot de passe" onClose={onClose}>
+      <div className="space-y-4">
+        <Input label="Nouveau mot de passe" type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="8 caractères minimum" />
+        <Input label="Confirmer" type="password" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} placeholder="••••••••" />
+        {error && <p className="text-sm text-error-600 bg-error-500/10 px-3 py-2 rounded-lg">{error}</p>}
+        <div className="flex gap-3">
+          <Button variant="outline" onClick={onClose} className="flex-1">Annuler</Button>
+          <Button onClick={submit} loading={saving} className="flex-1"><KeyRound className="w-4 h-4" /> Mettre à jour</Button>
+        </div>
+      </div>
+    </Modal>
   );
 }
 

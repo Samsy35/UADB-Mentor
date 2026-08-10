@@ -36,17 +36,20 @@ export default function Login() {
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 sm:p-8">
           <form onSubmit={handleSubmit} className="space-y-5">
             <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-slate-700">Email</label>
+              <label htmlFor="login-email" className="block text-sm font-medium text-slate-700">Email</label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="votre.email@uadb.edu.sn" className="w-full pl-11 pr-4 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 placeholder:text-slate-400 transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500" />
+                <input id="login-email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="votre.email@uadb.edu.sn" className="w-full pl-11 pr-4 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 placeholder:text-slate-400 transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500" />
               </div>
             </div>
             <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-slate-700">Mot de passe</label>
+              <div className="flex items-center justify-between">
+                <label htmlFor="login-password" className="block text-sm font-medium text-slate-700">Mot de passe</label>
+                <Link to="/mot-de-passe-oublie" className="text-sm text-primary-600 font-medium hover:text-primary-700">Mot de passe oublié ?</Link>
+              </div>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" className="w-full pl-11 pr-4 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 placeholder:text-slate-400 transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500" />
+                <input id="login-password" type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" className="w-full pl-11 pr-4 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 placeholder:text-slate-400 transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500" />
               </div>
             </div>
             {error && (
@@ -60,12 +63,6 @@ export default function Login() {
           <p className="text-center text-sm text-slate-500 mt-6">
             Pas encore de compte ? <Link to="/signup" className="text-primary-600 font-medium hover:text-primary-700">Créer un compte</Link>
           </p>
-          <div className="mt-5 rounded-xl border border-primary-100 bg-primary-50 px-4 py-3 text-xs text-primary-800">
-            <p className="font-semibold">Accès administrateur de démonstration</p>
-            <p className="mt-1">Email : admin@uadb.edu.sn</p>
-            <p>Mot de passe : AdminUADB2026!</p>
-            <p className="mt-1 text-primary-700">Après connexion, ouvrez « Administration » dans le menu.</p>
-          </div>
         </div>
       </div>
     </div>
