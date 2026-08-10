@@ -1,0 +1,294 @@
+openapi: 3.1.0
+info:
+  title: MentorUADB API
+  description: |
+    API des Edge Functions Supabase pour la plateforme de mentorat académique
+    de l'Université Alioune Diop de Bambey (UADB).
+
+    ## Authentification
+    Toutes les routes requièrent un JWT Supabase valide dans l'en-tête
+    `Authorization: Bearer <token>`. Le jeton est obtenu lors de la connexion
+    via Supabase Auth.
+
+    ## Rate Limiting
+    Chaque endpoint applique une limitation par utilisateur :
+    - **ai-chatbot** : 20 requêtes / minute
+    - **mentor-matching** : 30 requêtes / minute
+
+    Les en-têtes `X-RateLimit-Remaining` et `X-RateLimit-Reset` indiquent
+    l'état du quota.
+
+    ## CORS
+    Seules les origines du frontend (configurées via `ALLOWED_ORIGINS`) sont
+    autorisées.
+  version: 1.0.0
+  contact:
+    name: MentorUADB
+    url: https://uadb.edu.sn
+
+servers:
+  - url: https://uadb.supabase.co/functions/v1
+    description: Production
+  - url: http://localhost:54321/functions/v1
+    description: Développement local
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT Supabase obtenu via l'authentification email/password.
+
+  schemas:
+    ChatRequest:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          description: Question ou message de l'utilisateur.
+          example: "Comment trouver un mentor en maths ?"
+        history:
+          type: array
+          maxItems: 10
+          description: Historique récent de la conversation (optionnel).
+          items:
+            type: object
+            required: [role, content]
+            properties:
+              role:
+                type: string
+                enum: [user, assistant]
+              content:
+                type: string
+                maxLength: 2000
+
+    ChatResponse:
+      type: object
+      properties:
+        response:
+          type: string
+          description: Réponse du chatbot.
+        source:
+          type: string
+          enum: [claude, rules]
+          description: |
+            Source de la réponse : `claude` (API Anthropic) ou `rules`
+            (réponses prédéfinies de secours).
+
+    MatchingRequest:
+      type: object
+      required: [matiere_id]
+      properties:
+        matiere_id:
+          type: string
+          format: uuid
+          description: UUID de la matière recherchée.
+          example: "a1b2c3d4-..."
+        niveau_id:
+          type: string
+          format: uuid
+          description: UUID du niveau de l'étudiant (optionnel, booste le score).
+          example: "e5f6g7h8-..."
+
+    MatchingResponse:
+      type: object
+      properties:
+        total:
+          type: integer
+          description: Nombre total de mentors trouvés.
+        mentors:
+          type: array
+          items:
+            type: object
+            properties:
+              mentor_id:
+                type: string
+                format: uuid
+              nom:
+                type: string
+              prenom:
+                type: string
+              bio:
+                type: string
+                nullable: true
+              photo_url:
+                type: string
+                nullable: true
+              niveau_expertise:
+                type: string
+                enum: [debutant, intermediaire, avance, expert]
+              note_moyenne:
+                type: number
+                format: float
+                description: Note moyenne sur 5 (0 si aucune évaluation).
+              nombre_evaluations:
+                type: integer
+              nombre_disponibilites:
+                type: integer
+              score:
+                type: integer
+                description: |
+                  Score composite (0-100+) : note (×8) + disponibilités (×6, max 30)
+                  + même niveau (+20) + expertise (3-10).
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Message d'erreur lisible.
+        details:
+          description: Détails supplémentaires (optionnel).
+
+security:
+  - BearerAuth: []
+
+paths:
+  /ai-chatbot:
+    post:
+      summary: Chatbot IA MentorUADB
+      description: |
+        Envoie un message à l'assistant IA et reçoit une réponse.
+
+        Si la clé `ANTHROPIC_API_KEY` est configurée, le chatbot utilise
+        Claude (Anthropic) pour générer des réponses contextuelles.
+        Sinon, un moteur de règles prédéfinies répond aux questions
+        fréquentes sur la plateforme et l'UADB.
+      operationId: chatbot
+      tags: [Chatbot]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChatRequest"
+      responses:
+        "200":
+          description: Réponse du chatbot.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatResponse"
+          headers:
+            X-RateLimit-Remaining:
+              schema:
+                type: integer
+            X-RateLimit-Reset:
+              schema:
+                type: integer
+        "400":
+          description: Corps de requête JSON invalide.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Token d'authentification manquant, expiré ou invalide.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "405":
+          description: Méthode HTTP non autorisée.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Validation des champs échouée (message vide, trop long, etc.).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Limite de requêtes dépassée (20/min).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Erreur interne du serveur.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /mentor-matching:
+    post:
+      summary: Recherche de mentors par score
+      description: |
+        Retourne une liste classée de mentors pour une matière donnée,
+        triée par score composite (note moyenne, disponibilités, niveau,
+        expertise). Optionnellement filtrée par niveau de l'étudiant.
+      operationId: mentorMatching
+      tags: [Matching]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MatchingRequest"
+      responses:
+        "200":
+          description: Liste classée des mentors.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MatchingResponse"
+          headers:
+            X-RateLimit-Remaining:
+              schema:
+                type: integer
+            X-RateLimit-Reset:
+              schema:
+                type: integer
+        "400":
+          description: Corps de requête JSON invalide.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Token d'authentification manquant, expiré ou invalide.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Matière introuvable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "405":
+          description: Méthode HTTP non autorisée.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: UUID invalide pour matiere_id ou niveau_id.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Limite de requêtes dépassée (30/min).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Erreur lors de la recherche en base.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
