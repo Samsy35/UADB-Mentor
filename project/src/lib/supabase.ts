@@ -30,11 +30,20 @@ export type Profile = {
   updated_at: string;
 };
 
+export type UFR = {
+  id: string;
+  code: string;
+  nom: string;
+  type: string;
+  description: string | null;
+};
+
 export type Filiere = {
   id: string;
   code: string;
   nom: string;
   description: string | null;
+  ufr_id: string | null;
 };
 
 export type Niveau = {
@@ -46,8 +55,12 @@ export type Niveau = {
 
 export type Matiere = {
   id: string;
+  code?: string | null;
   nom: string;
   filiere_id: string | null;
+  ufr_id?: string | null;
+  niveau_id?: string | null;
+  actif?: boolean;
   description: string | null;
 };
 

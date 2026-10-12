@@ -44,10 +44,12 @@ export default function Messages() {
     }
     const otherIds = Array.from(convMap.keys());
     if (otherIds.length > 0) {
-      const { data: users } = await supabase.from('profiles').select('*').in('id', otherIds);
+      const { data: users } = await supabase.from('profiles').select('*').in('id', otherIds).eq('is_admin', false);
+      const allowedIds = new Set((users ?? []).map((u) => u.id));
+      for (const id of otherIds) if (!allowedIds.has(id)) convMap.delete(id);
       (users ?? []).forEach((u) => { const c = convMap.get(u.id); if (c) c.other = u as Profile; });
     }
-    const { data: allU } = await supabase.from('profiles').select('*').neq('id', profile.id).order('prenom');
+    const { data: allU } = await supabase.from('profiles').select('*').neq('id', profile.id).eq('is_admin', false).order('prenom');
     setAllUsers((allU ?? []) as Profile[]);
     setConversations(Array.from(convMap.values()).sort((a, b) => new Date(b.lastMessage.created_at).getTime() - new Date(a.lastMessage.created_at).getTime()));
     setLoading(false);
@@ -55,6 +57,8 @@ export default function Messages() {
 
   const loadMessages = async (otherId: string) => {
     if (!profile) return;
+    const { data: other } = await supabase.from('profiles').select('is_admin').eq('id', otherId).maybeSingle();
+    if (other?.is_admin) { setSelectedUserId(null); return; }
     const { data } = await supabase.from('messages').select('*').or(`and(expediteur_id.eq.${profile.id},destinataire_id.eq.${otherId}),and(expediteur_id.eq.${otherId},destinataire_id.eq.${profile.id})`).order('created_at', { ascending: true });
     setMessages((data ?? []) as Message[]);
     await supabase.from('messages').update({ lu: true }).eq('expediteur_id', otherId).eq('destinataire_id', profile.id).eq('lu', false);
@@ -62,6 +66,8 @@ export default function Messages() {
 
   const send = async () => {
     if (!input.trim() || !profile || !selectedUserId) return;
+    const { data: recipient } = await supabase.from('profiles').select('is_admin').eq('id', selectedUserId).maybeSingle();
+    if (recipient?.is_admin) { setInput(''); return; }
     const content = input.trim();
     setInput('');
     const { data } = await supabase.from('messages').insert({ expediteur_id: profile.id, destinataire_id: selectedUserId, contenu: content }).select('*').single();
@@ -91,11 +97,11 @@ export default function Messages() {
             <div className="p-3 border-b border-slate-200">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Rechercher un utilisateur..." className="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/40" />
+                <input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Rechercher un mentor ou mentoré..." className="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/40" />
               </div>
             </div>
             <div className="flex-1 overflow-y-auto">
-              {conversations.length === 0 && filteredUsers.length === 0 && <EmptyState icon={<MessageSquare className="w-10 h-10" />} title="Aucune conversation" description="Recherchez un utilisateur pour démarrer une discussion." />}
+              {conversations.length === 0 && filteredUsers.length === 0 && <EmptyState icon={<MessageSquare className="w-10 h-10" />} title="Aucune conversation" description="Une conversation apparaît après une demande ou une session de mentorat." />}
               {conversations.map((c) => (
                 <button key={c.other.id} onClick={() => setSelectedUserId(c.other.id)} className={`w-full flex items-center gap-3 p-3 hover:bg-slate-50 transition-colors border-b border-slate-50 text-left ${selectedUserId === c.other.id ? 'bg-primary-50' : ''}`}>
                   <Avatar nom={c.other.nom} prenom={c.other.prenom} photoUrl={c.other.photo_url} size="sm" />

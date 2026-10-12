@@ -17,8 +17,8 @@ const FAQ_RULES: { keywords: string[]; response: string }[] = [
   { keywords: ['evaluation', 'évaluation', 'note', 'notation'], response: "Après une session terminée, vous pouvez évaluer la séance (note sur 5 et commentaire)." },
   { keywords: ['bonjour', 'salut', 'hello', 'coucou', 'bonsoir'], response: "Bonjour ! Je suis l'assistant MentorUADB. Je peux vous aider à comprendre la plateforme, trouver un mentor, ou organiser une session. Posez-moi votre question !" },
   { keywords: ['merci'], response: "Avec plaisir ! N'hésitez pas si vous avez d'autres questions. Bonne révision !" },
-  { keywords: ['integr', 'derive', 'dériv', 'limite', 'math'], response: "Pour les questions de mathématiques, je vous recommande de prendre une session avec un mentor en « Analyse Mathématique » ou « Algèbre Linéaire ». Allez dans « Trouver un mentor »." },
-  { keywords: ['algorithme', 'code', 'programmation', 'bug'], response: "Pour les questions de programmation, prenez une session avec un mentor en « Algorithmique et Structures de Données ». Allez dans « Trouver un mentor »." },
+  { keywords: ['integr', 'derive', 'dériv', 'limite', 'math'], response: "Pour progresser en mathématiques, je peux vous aider à revoir la méthode et les étapes de résolution. Donnez-moi l’énoncé ou le concept qui vous bloque. Si vous avez besoin d’un accompagnement personnalisé, recherchez ensuite un mentor en Analyse ou Algèbre linéaire." },
+  { keywords: ['algorithme', 'code', 'programmation', 'bug'], response: "Pour un problème de programmation, décrivez l’objectif, les données d’entrée, le résultat attendu et ce que vous avez déjà essayé. Je peux vous guider sur la méthode et les concepts, puis vous orienter vers un mentor si nécessaire." },
   { keywords: ['validation', 'valide', 'admin'], response: "Les comptes sont validés manuellement par les administrateurs. Cette vérification assure que seuls de vrais étudiants de l'UADB utilisent la plateforme." },
   { keywords: ['uadb', 'université', 'filière', 'filiere'], response: "L'UADB compte 4 composantes : UFR SATIC (Maths, Physique, Chimie, TIC — Ngoundiane), UFR SDD (Santé, Environnement — Diourbel), UFR ECOMIJ (Économie, Management, Droit — Bambey) et ISFAR (Agriculture, Élevage, Foresterie — Bambey)." },
 ];
@@ -36,7 +36,7 @@ export default function ChatbotWidget() {
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([
-    { role: 'bot', content: "Bonjour ! Je suis l'assistant MentorUADB. Posez-moi une question sur la plateforme, ou demandez de l'aide pour trouver un mentor." },
+    { role: 'bot', content: "Bonjour ! Je suis l’assistant pédagogique MentorUADB. Je peux vous aider à comprendre un cours, structurer une méthode de travail, préparer une révision ou vous orienter vers un mentor. Je ne remplace pas un enseignant : pour une explication approfondie, je vous recommande une session de mentorat." },
   ]);
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -103,7 +103,7 @@ export default function ChatbotWidget() {
               <Bot className="w-5 h-5 text-white" />
             </div>
             <div className="flex-1">
-              <p className="font-semibold text-slate-900 text-sm">Assistant MentorUADB</p>
+              <p className="font-semibold text-slate-900 text-sm">Assistant pédagogique</p>
               <p className="text-xs text-secondary-600 flex items-center gap-1">
                 <Sparkles className="w-3 h-3" /> En ligne
               </p>
@@ -136,7 +136,7 @@ export default function ChatbotWidget() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && !loading && send()}
-              placeholder="Posez votre question..."
+              placeholder="Ex. Explique-moi cette notion..."
               className="flex-1 px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500"
             />
             <button

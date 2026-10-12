@@ -1,22 +1,33 @@
 import { supabase } from '@/lib/supabase';
-import type { Filiere, Matiere, Niveau } from '@/lib/supabase';
+import type { Filiere, Matiere, Niveau, UFR } from '@/lib/supabase';
 
-export async function fetchFilieres(): Promise<Filiere[]> {
-  const { data, error } = await supabase.from('filieres').select('*').order('nom');
+export async function fetchUFRs(): Promise<UFR[]> {
+  const { data, error } = await supabase.from('ufrs').select('*').order('nom');
   if (error) throw error;
-  return data as Filiere[];
+  return (data ?? []) as UFR[];
+}
+
+export async function fetchFilieres(ufrId?: string): Promise<Filiere[]> {
+  let query = supabase.from('filieres').select('*').order('nom');
+  if (ufrId) query = query.eq('ufr_id', ufrId);
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data ?? []) as Filiere[];
 }
 
 export async function fetchNiveaux(): Promise<Niveau[]> {
   const { data, error } = await supabase.from('niveaux').select('*').order('ordre');
   if (error) throw error;
-  return data as Niveau[];
+  return (data ?? []) as Niveau[];
 }
 
-export async function fetchMatieres(): Promise<Matiere[]> {
-  const { data, error } = await supabase.from('matieres').select('*').order('nom');
+export async function fetchMatieres(filiereId?: string, niveauId?: string): Promise<Matiere[]> {
+  let query = supabase.from('matieres').select('*').eq('actif', true).order('nom');
+  if (filiereId) query = query.eq('filiere_id', filiereId);
+  if (niveauId) query = query.or(`niveau_id.eq.${niveauId},niveau_id.is.null`);
+  const { data, error } = await query;
   if (error) throw error;
-  return data as Matiere[];
+  return (data ?? []) as Matiere[];
 }
 
 export function formatDate(date: string): string {
@@ -46,5 +57,5 @@ export function initials(nom: string, prenom: string): string {
 }
 
 export function fullName(p: { nom: string; prenom: string }): string {
-  return `${p.prenom} ${p.nom}`;
+  return `${p.prenom} ${p.nom}`.trim();
 }

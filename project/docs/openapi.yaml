@@ -3,7 +3,7 @@ info:
   title: MentorUADB API
   description: |
     API des Edge Functions Supabase pour la plateforme de mentorat académique
-    de l'Université Alioune Diop de Bambey (UADB).
+    de l'Université Alioune Diop de Bambey (UADB) — v2.
 
     ## Authentification
     Toutes les routes requièrent un JWT Supabase valide dans l'en-tête
@@ -14,6 +14,9 @@ info:
     Chaque endpoint applique une limitation par utilisateur :
     - **ai-chatbot** : 20 requêtes / minute
     - **mentor-matching** : 30 requêtes / minute
+    - **send-notification** : 60 requêtes / minute
+    - **session-report** : 30 requêtes / minute
+    - **admin-stats** : 20 requêtes / minute
 
     Les en-têtes `X-RateLimit-Remaining` et `X-RateLimit-Reset` indiquent
     l'état du quota.
@@ -21,7 +24,13 @@ info:
     ## CORS
     Seules les origines du frontend (configurées via `ALLOWED_ORIGINS`) sont
     autorisées.
-  version: 1.0.0
+
+    ## Alignement Cahier des Charges
+    - `mentor-matching` : score composite §12 (Matière 35%, Niveau 20%, Dispo 20%, Compétence 15%, Éval 10%)
+    - `send-notification` : §20 — notifications internes + email optionnel via Resend
+    - `session-report` : §17 — rapport post-séance mentor/étudiant
+    - `admin-stats` : §23-24 — tableau de bord et statistiques administrateur
+  version: 2.0.0
   contact:
     name: MentorUADB
     url: https://uadb.edu.sn
@@ -41,6 +50,7 @@ components:
       description: JWT Supabase obtenu via l'authentification email/password.
 
   schemas:
+    # ── CHATBOT ───────────────────────────────────────────────
     ChatRequest:
       type: object
       required: [message]
@@ -79,6 +89,7 @@ components:
             Source de la réponse : `claude` (API Anthropic) ou `rules`
             (réponses prédéfinies de secours).
 
+    # ── MATCHING ──────────────────────────────────────────────
     MatchingRequest:
       type: object
       required: [matiere_id]
@@ -86,22 +97,269 @@ components:
         matiere_id:
           type: string
           format: uuid
-          description: UUID de la matière recherchée.
-          example: "a1b2c3d4-..."
+          description: UUID de la matière recherchée (requis).
+          example: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
         niveau_id:
           type: string
           format: uuid
-          description: UUID du niveau de l'étudiant (optionnel, booste le score).
-          example: "e5f6g7h8-..."
+          description: UUID du niveau de l'étudiant (optionnel, booste le score niveau de 20%).
+        mode:
+          type: string
+          enum: [en_ligne, presentiel, les_deux]
+          description: Filtre sur le mode d'accompagnement préféré du mentor.
+        jour_semaine:
+          type: integer
+          minimum: 0
+          maximum: 6
+          description: Filtre sur le jour de disponibilité (0=dimanche, 6=samedi).
+        filiere_id:
+          type: string
+          format: uuid
+          description: Filtre sur la filière du mentor.
+
+    MentorResult:
+      type: object
+      properties:
+        mentor_id:
+          type: string
+          format: uuid
+        nom:
+          type: string
+        prenom:
+          type: string
+        bio:
+          type: string
+          nullable: true
+        photo_url:
+          type: string
+          nullable: true
+        niveau_expertise:
+          type: string
+          enum: [debutant, intermediaire, avance, expert]
+        mode_preference:
+          type: string
+          nullable: true
+          enum: [en_ligne, presentiel, les_deux]
+        experience:
+          type: string
+          nullable: true
+        note_moyenne:
+          type: number
+          format: float
+          description: Note moyenne sur 5.
+        nombre_evaluations:
+          type: integer
+        nombre_disponibilites:
+          type: integer
+        score_niveau:
+          type: integer
+          description: Sous-score niveau (0 ou 20).
+        score_disponibilite:
+          type: integer
+          description: Sous-score disponibilité (0-20).
+        score_competence:
+          type: integer
+          description: Sous-score compétence (0-15).
+        score_evaluation:
+          type: integer
+          description: Sous-score évaluation (0-10).
+        score_total:
+          type: integer
+          description: |
+            Score composite (0-100) aligné §12 CDC :
+            Matière(35) + Niveau(0|20) + Dispo(0-20) + Compétence(0-15) + Éval(0-10).
 
     MatchingResponse:
       type: object
       properties:
         total:
           type: integer
-          description: Nombre total de mentors trouvés.
+          description: Nombre de mentors trouvés.
+        matiere:
+          type: string
+          description: Nom de la matière recherchée.
         mentors:
           type: array
+          items:
+            $ref: "#/components/schemas/MentorResult"
+
+    # ── NOTIFICATIONS ─────────────────────────────────────────
+    NotificationRequest:
+      type: object
+      required: [destinataire_id, type, titre, contenu]
+      properties:
+        destinataire_id:
+          type: string
+          format: uuid
+          description: UUID du profil destinataire.
+        type:
+          type: string
+          enum:
+            - nouvelle_demande
+            - demande_acceptee
+            - demande_refusee
+            - demande_modif
+            - nouveau_message
+            - session_programmee
+            - rappel_session
+            - session_annulee
+            - session_terminee
+            - nouvelle_evaluation
+            - compte_valide
+            - compte_suspendu
+            - info
+          description: Type de notification (§20 CDC).
+        titre:
+          type: string
+          maxLength: 150
+        contenu:
+          type: string
+          maxLength: 1000
+        lien:
+          type: string
+          description: URL relative vers l'entité concernée (ex. /sessions/uuid).
+          nullable: true
+        entite_type:
+          type: string
+          description: Type de l'entité liée (session, demande, message...).
+          nullable: true
+        entite_id:
+          type: string
+          format: uuid
+          nullable: true
+
+    NotificationResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        notification_id:
+          type: string
+          format: uuid
+
+    # ── SESSION REPORT ────────────────────────────────────────
+    SessionReportRequest:
+      type: object
+      required: [session_id]
+      description: |
+        Rapport post-séance (§17 CDC).
+        Le mentor renseigne les champs de suivi.
+        L'étudiant peut uniquement renseigner `niveau_comprehension_etudiant`.
+      properties:
+        session_id:
+          type: string
+          format: uuid
+          description: UUID de la session concernée.
+        sujet_traite:
+          type: string
+          maxLength: 2000
+          nullable: true
+        notions_abordees:
+          type: string
+          maxLength: 2000
+          nullable: true
+        difficultes_observees:
+          type: string
+          maxLength: 2000
+          nullable: true
+        exercices_realises:
+          type: string
+          maxLength: 2000
+          nullable: true
+        niveau_comprehension_mentor:
+          type: string
+          enum: [insuffisant, en_progres, acquis, excellent]
+          nullable: true
+        recommandations:
+          type: string
+          maxLength: 2000
+          nullable: true
+        objectif_prochaine_seance:
+          type: string
+          maxLength: 2000
+          nullable: true
+        niveau_comprehension_etudiant:
+          type: string
+          enum: [incompris, partiellement, bien_compris, tres_bien_compris]
+          nullable: true
+          description: Champ réservé à l'étudiant. Si présent, seul ce champ est mis à jour.
+
+    SessionReportResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        suivi:
+          type: object
+          description: L'enregistrement suivi_seances créé ou mis à jour.
+
+    # ── ADMIN STATS ───────────────────────────────────────────
+    AdminStatsResponse:
+      type: object
+      properties:
+        dashboard:
+          type: object
+          description: KPIs globaux (§23 CDC).
+          properties:
+            nb_etudiants:
+              type: integer
+            nb_mentors:
+              type: integer
+            nb_mentors_valides:
+              type: integer
+            nb_en_attente_validation:
+              type: integer
+            nb_sessions_total:
+              type: integer
+            nb_sessions_terminees:
+              type: integer
+            nb_sessions_annulees:
+              type: integer
+            taux_annulation_pct:
+              type: number
+            nb_demandes_total:
+              type: integer
+            nb_demandes_acceptees:
+              type: integer
+            nb_demandes_refusees:
+              type: integer
+            taux_acceptation_pct:
+              type: number
+            note_moyenne_globale:
+              type: number
+            nb_evaluations:
+              type: integer
+            nb_signalements_ouverts:
+              type: integer
+            nb_ressources:
+              type: integer
+            nb_messages:
+              type: integer
+        matieres:
+          type: array
+          description: Statistiques par matière (§24 CDC — matières les plus demandées).
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                format: uuid
+              nom:
+                type: string
+              code:
+                type: string
+                nullable: true
+              nb_demandes:
+                type: integer
+              nb_sessions:
+                type: integer
+              nb_sessions_terminees:
+                type: integer
+              nb_mentors:
+                type: integer
+        mentors_top:
+          type: array
+          description: Top 5 mentors par note (§24 CDC).
           items:
             type: object
             properties:
@@ -112,29 +370,38 @@ components:
                 type: string
               prenom:
                 type: string
-              bio:
-                type: string
-                nullable: true
               photo_url:
                 type: string
                 nullable: true
-              niveau_expertise:
-                type: string
-                enum: [debutant, intermediaire, avance, expert]
               note_moyenne:
                 type: number
-                format: float
-                description: Note moyenne sur 5 (0 si aucune évaluation).
-              nombre_evaluations:
+              nb_evaluations:
                 type: integer
-              nombre_disponibilites:
+              nb_sessions_terminees:
                 type: integer
-              score:
+        evolution_mensuelle:
+          type: array
+          description: Évolution mensuelle des sessions (6 derniers mois).
+          items:
+            type: object
+            properties:
+              mois:
+                type: string
+                description: Format YYYY-MM.
+              nb_sessions:
                 type: integer
-                description: |
-                  Score composite (0-100+) : note (×8) + disponibilités (×6, max 30)
-                  + même niveau (+20) + expertise (3-10).
+              nb_terminees:
+                type: integer
+        comptes_en_attente:
+          type: array
+          description: Comptes en attente de validation.
+          items:
+            type: object
+        generated_at:
+          type: string
+          format: date-time
 
+    # ── ERREUR ────────────────────────────────────────────────
     Error:
       type: object
       properties:
@@ -148,20 +415,22 @@ security:
   - BearerAuth: []
 
 paths:
+  # ── CHATBOT ────────────────────────────────────────────────
   /ai-chatbot:
     post:
       summary: Chatbot IA MentorUADB
       description: |
-        Envoie un message à l'assistant IA et reçoit une réponse.
+        Envoie un message à l'assistant IA et reçoit une réponse contextualisée
+        sur la plateforme, les matières UADB et les conseils méthodologiques.
 
-        Si la clé `ANTHROPIC_API_KEY` est configurée, le chatbot utilise
-        Claude (Anthropic) pour générer des réponses contextuelles.
-        Sinon, un moteur de règles prédéfinies répond aux questions
-        fréquentes sur la plateforme et l'UADB.
+        Le prompt système couvre toutes les fonctionnalités v2 :
+        demandes de mentorat, suivi post-séance, ressources pédagogiques,
+        notifications, signalements et le système de scoring §12.
+
+        Si `ANTHROPIC_API_KEY` est configuré, utilise Claude (claude-3-5-haiku).
+        Sinon, un moteur de règles prédéfinies répond.
       operationId: chatbot
       tags: [Chatbot]
-      security:
-        - BearerAuth: []
       requestBody:
         required: true
         content:
@@ -177,19 +446,17 @@ paths:
                 $ref: "#/components/schemas/ChatResponse"
           headers:
             X-RateLimit-Remaining:
-              schema:
-                type: integer
+              schema: { type: integer }
             X-RateLimit-Reset:
-              schema:
-                type: integer
+              schema: { type: integer }
         "400":
-          description: Corps de requête JSON invalide.
+          description: Corps JSON invalide.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
         "401":
-          description: Token d'authentification manquant, expiré ou invalide.
+          description: Token manquant, expiré ou invalide.
           content:
             application/json:
               schema:
@@ -201,7 +468,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "422":
-          description: Validation des champs échouée (message vide, trop long, etc.).
+          description: Validation échouée (message vide, trop long, history invalide...).
           content:
             application/json:
               schema:
@@ -213,51 +480,71 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "500":
-          description: Erreur interne du serveur.
+          description: Erreur interne.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
 
+  # ── MATCHING ───────────────────────────────────────────────
   /mentor-matching:
     post:
-      summary: Recherche de mentors par score
+      summary: Recherche de mentors (scoring §12 CDC)
       description: |
-        Retourne une liste classée de mentors pour une matière donnée,
-        triée par score composite (note moyenne, disponibilités, niveau,
-        expertise). Optionnellement filtrée par niveau de l'étudiant.
+        Retourne une liste classée de mentors pour une matière donnée.
+
+        **Score composite (§12 CDC) :**
+        | Critère | Pondération |
+        |---------|-------------|
+        | Matière (filtre) | 35% |
+        | Niveau adapté | 20% |
+        | Disponibilité | 20% |
+        | Compétence/expertise | 15% |
+        | Évaluation (note moy) | 10% |
+
+        Les sous-scores détaillés sont inclus dans la réponse pour transparence.
+        Filtres optionnels : `mode`, `jour_semaine`, `filiere_id`.
+        Seuls les mentors avec `statut_validation = 'valide'` sont retournés (RG02 CDC).
       operationId: mentorMatching
       tags: [Matching]
-      security:
-        - BearerAuth: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
               $ref: "#/components/schemas/MatchingRequest"
+            examples:
+              recherche_simple:
+                summary: Recherche simple par matière
+                value:
+                  matiere_id: "6f0729d3-cb0a-4378-86da-64c2e8dff7d6"
+              recherche_filtree:
+                summary: Recherche avec tous les filtres
+                value:
+                  matiere_id: "6f0729d3-cb0a-4378-86da-64c2e8dff7d6"
+                  niveau_id: "1971202a-5b4f-491e-a201-176e998c3ab4"
+                  mode: "presentiel"
+                  jour_semaine: 2
       responses:
         "200":
-          description: Liste classée des mentors.
+          description: Liste classée de mentors avec scores détaillés.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/MatchingResponse"
           headers:
             X-RateLimit-Remaining:
-              schema:
-                type: integer
+              schema: { type: integer }
             X-RateLimit-Reset:
-              schema:
-                type: integer
+              schema: { type: integer }
         "400":
-          description: Corps de requête JSON invalide.
+          description: Corps JSON invalide.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
         "401":
-          description: Token d'authentification manquant, expiré ou invalide.
+          description: Token manquant, expiré ou invalide.
           content:
             application/json:
               schema:
@@ -268,14 +555,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
-        "405":
-          description: Méthode HTTP non autorisée.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
         "422":
-          description: UUID invalide pour matiere_id ou niveau_id.
+          description: UUID invalide ou filtre incorrect.
           content:
             application/json:
               schema:
@@ -287,7 +568,249 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "500":
-          description: Erreur lors de la recherche en base.
+          description: Erreur interne.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  # ── NOTIFICATIONS ──────────────────────────────────────────
+  /send-notification:
+    post:
+      summary: Envoyer une notification (§20 CDC)
+      description: |
+        Crée une notification interne dans la table `notifications` et,
+        si `RESEND_API_KEY` est configuré, envoie également un email
+        au destinataire via l'API Resend.
+
+        Les triggers SQL créent automatiquement des notifications pour :
+        nouvelles demandes, changements de statut session, nouveaux messages.
+        Cette Edge Function est utile pour les notifications manuelles ou
+        les rappels programmés.
+      operationId: sendNotification
+      tags: [Notifications]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NotificationRequest"
+            examples:
+              rappel_session:
+                summary: Rappel de séance
+                value:
+                  destinataire_id: "uuid-etudiant"
+                  type: "rappel_session"
+                  titre: "Rappel : séance dans 1 heure"
+                  contenu: "Votre séance d'algorithmique commence dans 1 heure."
+                  lien: "/sessions/uuid-session"
+                  entite_type: "session"
+                  entite_id: "uuid-session"
+      responses:
+        "201":
+          description: Notification créée avec succès.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationResponse"
+          headers:
+            X-RateLimit-Remaining:
+              schema: { type: integer }
+            X-RateLimit-Reset:
+              schema: { type: integer }
+        "400":
+          description: Corps JSON invalide.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Token manquant ou invalide.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Destinataire introuvable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Validation échouée (UUID invalide, type inconnu...).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Limite de requêtes dépassée (60/min).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Erreur interne.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  # ── SESSION REPORT ─────────────────────────────────────────
+  /session-report:
+    post:
+      summary: Rapport de suivi post-séance (§17 CDC)
+      description: |
+        Crée ou met à jour le suivi d'une séance terminée ou en cours.
+
+        **Rôle mentor** : renseigne tous les champs de suivi
+        (sujet, notions, difficultés, recommandations, objectif suivant,
+        niveau compréhension du point de vue mentor).
+
+        **Rôle étudiant** : renseigne uniquement `niveau_comprehension_etudiant`.
+        Si ce champ est présent dans le body, seul ce champ est mis à jour.
+
+        La session doit avoir le statut `en_cours` ou `terminée`.
+        Un seul suivi par session (UNIQUE sur `session_id`).
+      operationId: sessionReport
+      tags: [Suivi]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SessionReportRequest"
+            examples:
+              rapport_mentor:
+                summary: Rapport complet du mentor
+                value:
+                  session_id: "uuid-session"
+                  sujet_traite: "Récursivité et complexité algorithmique"
+                  notions_abordees: "Récursivité terminale, arbre des appels, O(n)"
+                  difficultes_observees: "Confusion entre récursivité et itération"
+                  exercices_realises: "Exercices 3 à 6 du TD algorithmique"
+                  niveau_comprehension_mentor: "en_progres"
+                  recommandations: "Revoir les exercices 3 à 6, pratiquer avec des exemples simples"
+                  objectif_prochaine_seance: "Maîtriser la récursivité sur les arbres"
+              auto_evaluation_etudiant:
+                summary: Auto-évaluation de l'étudiant
+                value:
+                  session_id: "uuid-session"
+                  niveau_comprehension_etudiant: "partiellement"
+      responses:
+        "200":
+          description: Suivi mis à jour.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionReportResponse"
+          headers:
+            X-RateLimit-Remaining:
+              schema: { type: integer }
+            X-RateLimit-Reset:
+              schema: { type: integer }
+        "201":
+          description: Suivi créé.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionReportResponse"
+        "400":
+          description: Corps JSON invalide ou aucun champ fourni.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Token manquant ou invalide.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Accès refusé (non-participant ou mauvais rôle).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Session introuvable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Validation échouée ou session dans un statut non autorisé.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Limite de requêtes dépassée (30/min).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Erreur interne.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  # ── ADMIN STATS ────────────────────────────────────────────
+  /admin-stats:
+    get:
+      summary: Tableau de bord administrateur (§23-24 CDC)
+      description: |
+        Retourne l'ensemble des KPIs pour le tableau de bord admin.
+        **Accès restreint** : nécessite `is_admin = true` dans le profil.
+
+        Inclut :
+        - KPIs globaux (utilisateurs, sessions, demandes, évaluations, signalements)
+        - Statistiques par matière (matières les plus demandées)
+        - Top 5 mentors par note
+        - Évolution mensuelle des sessions (6 derniers mois)
+        - Liste des comptes en attente de validation
+      operationId: adminStats
+      tags: [Administration]
+      responses:
+        "200":
+          description: Statistiques complètes pour l'administrateur.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminStatsResponse"
+          headers:
+            X-RateLimit-Remaining:
+              schema: { type: integer }
+            X-RateLimit-Reset:
+              schema: { type: integer }
+        "401":
+          description: Token manquant ou invalide.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Accès réservé aux administrateurs.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "405":
+          description: Méthode HTTP non autorisée.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Limite de requêtes dépassée (20/min).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Erreur interne.
           content:
             application/json:
               schema:

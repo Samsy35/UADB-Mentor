@@ -7,8 +7,11 @@ import { Avatar } from '@/components/Avatar';
 import { fetchMatieres, fetchFilieres, fullName } from '@/lib/utils';
 
 type MentorWithRelations = Profile & {
-  mentor_matieres: { matiere: Matiere }[];
+  mentor_matieres: { matiere: Matiere & { filiere_id?: string | null } }[];
   disponibilites: { jour_semaine: number; heure_debut: string; heure_fin: string; mode: string }[];
+  mentorScore?: number;
+  rating?: number;
+  menteeCount?: number;
 };
 
 export default function Mentors() {
@@ -16,6 +19,7 @@ export default function Mentors() {
   const [mentors, setMentors] = useState<MentorWithRelations[]>([]);
   const [matieres, setMatieres] = useState<Matiere[]>([]);
   const [filieres, setFilieres] = useState<Filiere[]>([]);
+  const [catalogLoading, setCatalogLoading] = useState(true);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [matiereFilter, setMatiereFilter] = useState('');
@@ -23,24 +27,56 @@ export default function Mentors() {
   const [selectedMentor, setSelectedMentor] = useState<MentorWithRelations | null>(null);
 
   useEffect(() => {
-    Promise.all([fetchMatieres(), fetchFilieres()]).then(([m, f]) => { setMatieres(m); setFilieres(f); });
-    loadMentors();
-  }, []);
+    const init = async () => {
+      setCatalogLoading(true);
+      try {
+        const [m, f] = await Promise.all([fetchMatieres(profile?.filiere_id || undefined, profile?.niveau_id || undefined), fetchFilieres()]);
+        setMatieres(m); setFilieres(f);
+        if (profile?.filiere_id) setFiliereFilter(profile.filiere_id);
+      } finally { setCatalogLoading(false); }
+      await loadMentors();
+    };
+    init();
+  }, [profile?.filiere_id, profile?.niveau_id]);
 
   const loadMentors = async () => {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select(`*, mentor_matieres ( matiere:matieres(*) ), disponibilites ( jour_semaine, heure_debut, heure_fin, mode )`)
-      .eq('is_mentor', true)
-      .neq('id', profile?.id ?? '');
-    if (!error && data) setMentors(data as MentorWithRelations[]);
+    const [{ data: currentFiliere }, { data: currentLevel }, { data, error }] = await Promise.all([
+      profile?.filiere_id ? supabase.from('filieres').select('ufr_id').eq('id', profile.filiere_id).maybeSingle() : Promise.resolve({data:null}),
+      profile?.niveau_id ? supabase.from('niveaux').select('ordre').eq('id', profile.niveau_id).maybeSingle() : Promise.resolve({data:null}),
+      supabase.from('profiles').select(`*, filiere:filieres(ufr_id), niveau:niveaux(ordre), mentor_matieres ( matiere:matieres(*) ), disponibilites ( jour_semaine, heure_debut, heure_fin, mode )`).eq('is_mentor', true).eq('is_admin', false).eq('statut_validation', 'valide').neq('id', profile?.id ?? ''),
+    ]);
+    /* query is assembled above so the matching factors can be scored locally */
+    /* eslint-disable-next-line no-unused-vars */
+    if (!error && data) {
+      const ids = (data as Profile[]).map(x => x.id);
+      const [evaluations, sessions] = await Promise.all([
+        ids.length ? supabase.from('evaluations').select('evalue_id,note,note_globale').in('evalue_id', ids) : Promise.resolve({ data: [] as any[] }),
+        ids.length ? supabase.from('sessions').select('mentor_id,mentore_id,statut').in('mentor_id', ids) : Promise.resolve({ data: [] as any[] }),
+      ]);
+      const evalMap = new Map<string, number[]>();
+      (evaluations.data ?? []).forEach((e:any) => { const n=Number(e.note_globale ?? e.note ?? 0); if(n>0) evalMap.set(e.evalue_id,[...(evalMap.get(e.evalue_id)??[]),n]); });
+      const menteeMap = new Map<string, Set<string>>();
+      (sessions.data ?? []).forEach((x:any) => { if(['demandee','acceptee','terminee'].includes(x.statut)) { if(!menteeMap.has(x.mentor_id)) menteeMap.set(x.mentor_id,new Set()); menteeMap.get(x.mentor_id)!.add(x.mentore_id); } });
+      const enriched = (data as MentorWithRelations[]).map(m => {
+        const ratings=evalMap.get(m.id)??[]; const rating=ratings.length ? ratings.reduce((a,b)=>a+b,0)/ratings.length : 0; const mentees=menteeMap.get(m.id)?.size??0;
+        const sameFiliere=!!(m.filiere_id && profile?.filiere_id && m.filiere_id===profile.filiere_id);
+        const sameUfr=!!((m as any).filiere?.ufr_id && currentFiliere?.ufr_id && (m as any).filiere.ufr_id === currentFiliere.ufr_id);
+        const hasRequestedMatiere=m.mentor_matieres?.some(mm=>!matiereFilter || mm.matiere?.id===matiereFilter);
+        const availability=m.disponibilites?.length??0;
+        const mentorOrder=Number((m as any).niveau?.ordre ?? 0); const studentOrder=Number((currentLevel as any)?.ordre ?? 0); const level=mentorOrder>studentOrder ? 1 : mentorOrder===studentOrder ? 0.5 : 0;
+        const score=(hasRequestedMatiere?40:0)+(sameFiliere?25:0)+(sameUfr?10:0)+(level*5)+Math.min(availability,5)*2+Math.min(mentees,10)*-1+(rating?rating*3:0);
+        return {...m, mentorScore:score, rating, menteeCount:mentees};
+      });
+      setMentors(enriched);
+    }
     setLoading(false);
   };
 
   const filtered = useMemo(() => {
     return mentors.filter((m) => {
+      const allowedFiliere = profile?.filiere_id || filiereFilter;
+      if (allowedFiliere && m.filiere_id !== allowedFiliere) return false;
       if (matiereFilter && !m.mentor_matieres?.some((mm) => mm.matiere?.id === matiereFilter)) return false;
-      if (filiereFilter && m.filiere_id !== filiereFilter) return false;
       if (search) {
         const q = search.toLowerCase();
         const matchesName = `${m.prenom} ${m.nom}`.toLowerCase().includes(q);
@@ -48,8 +84,12 @@ export default function Mentors() {
         if (!matchesName && !matchesMatiere) return false;
       }
       return true;
+    }).sort((a,b) => {
+      const aMatter = matiereFilter && a.mentor_matieres?.some(mm => mm.matiere?.id === matiereFilter) ? 40 : 0;
+      const bMatter = matiereFilter && b.mentor_matieres?.some(mm => mm.matiere?.id === matiereFilter) ? 40 : 0;
+      return ((b.mentorScore??0)+bMatter)-((a.mentorScore??0)+aMatter);
     });
-  }, [mentors, search, matiereFilter, filiereFilter]);
+  }, [mentors, search, matiereFilter, filiereFilter, profile?.filiere_id]);
 
   const hasFilters = search || matiereFilter || filiereFilter;
 
@@ -59,7 +99,7 @@ export default function Mentors() {
     <div className="space-y-6 animate-fade-in">
       <div>
         <h1 className="text-2xl font-bold text-slate-900">Trouver un mentor</h1>
-        <p className="text-slate-500 mt-1">Recherchez un mentor par matière, filière ou nom</p>
+        <p className="text-slate-500 mt-1">Les mentors affichés sont validés par l’administration et adaptés à votre filière.</p>
       </div>
 
       <Card className="p-4">
@@ -70,13 +110,14 @@ export default function Mentors() {
         <div className="flex flex-wrap gap-3 mt-3">
           <Select value={matiereFilter} onChange={(e) => setMatiereFilter(e.target.value)} className="flex-1 min-w-40">
             <option value="">Toutes les matières</option>
-            {matieres.map((m) => <option key={m.id} value={m.id}>{m.nom}</option>)}
+            {matieres.map((m) => <option key={m.id} value={m.id}>{m.nom}{m.code ? ` · ${m.code}` : ''}</option>)}
           </Select>
-          <Select value={filiereFilter} onChange={(e) => setFiliereFilter(e.target.value)} className="flex-1 min-w-40">
+          {!profile?.filiere_id && <Select value={filiereFilter} onChange={(e) => { setFiliereFilter(e.target.value); setMatiereFilter(''); }} className="flex-1 min-w-40">
             <option value="">Toutes les filières</option>
             {filieres.map((f) => <option key={f.id} value={f.id}>{f.nom}</option>)}
-          </Select>
-          {hasFilters && <Button variant="outline" onClick={() => { setSearch(''); setMatiereFilter(''); setFiliereFilter(''); }}><X className="w-4 h-4" /> Effacer</Button>}
+          </Select>}
+          {catalogLoading && <span className="text-xs text-slate-400 self-center">Chargement du catalogue…</span>}
+          {hasFilters && <Button variant="outline" onClick={() => { setSearch(''); setMatiereFilter(''); if (!profile?.filiere_id) setFiliereFilter(''); }}><X className="w-4 h-4" /> Effacer</Button>}
         </div>
       </Card>
 
@@ -107,7 +148,7 @@ function MentorCard({ mentor, onClick }: { mentor: MentorWithRelations; onClick:
           <Avatar nom={mentor.nom} prenom={mentor.prenom} photoUrl={mentor.photo_url} size="lg" />
           <div className="flex-1 min-w-0">
             <h3 className="font-semibold text-slate-900 truncate">{fullName(mentor)}</h3>
-            <p className="text-sm text-slate-500 truncate">{mentor.bio || 'Mentor disponible'}</p>
+            <p className="text-sm text-slate-500 truncate">{mentor.bio || 'Mentor disponible'}</p><div className="flex flex-wrap gap-1.5 mt-2"><Badge color="green">{mentor.rating ? `${mentor.rating.toFixed(1)}/5` : 'Nouveau'}</Badge><Badge color="slate">{mentor.menteeCount ?? 0} mentoré(s)</Badge><Badge color="blue">Priorité {Math.max(0, Math.round(mentor.mentorScore ?? 0))}</Badge></div>
             <div className="flex flex-wrap gap-1.5 mt-2">
               {matieres.slice(0, 3).map((m) => <Badge key={m} color="blue">{m}</Badge>)}
               {matieres.length > 3 && <Badge>+{matieres.length - 3}</Badge>}

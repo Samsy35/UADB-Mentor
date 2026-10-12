@@ -24,6 +24,7 @@ Ton rôle :
 - Aider les étudiants à formuler leur demande (ex: "je ne comprends pas les intégrales" → orienter vers "Analyse Mathématique")
 - Orienter vers un mentor disponible si la question nécessite un accompagnement
 - Donner des conseils méthodologiques de révision et d'organisation
+- Expliquer les nouvelles fonctionnalités (demandes, suivi, ressources, notifications)
 
 Informations sur l'UADB :
 - UFR SATIC (Ngoundiane) : Mathématiques, Physique, Chimie, TIC (Développement Web, Administration Réseau, Création Multimédia)
@@ -32,12 +33,63 @@ Informations sur l'UADB :
 - ISFAR (Bambey) : Agriculture, Élevage, Foresterie, Génie Rural
 - École Doctorale EDSTSS : Doctorats pluridisciplinaires
 
-Fonctionnement de la plateforme :
-1. Inscription avec rôle mentoré et/ou mentor
-2. Recherche de mentor par matière via "Trouver un mentor"
-3. Demande de session (en ligne ou présentiel)
-4. Messagerie entre mentor et mentoré
-5. Évaluation après session
+Fonctionnement complet de la plateforme :
+
+1. INSCRIPTION & PROFIL
+   - Créer un compte avec rôle mentoré, mentor, ou les deux
+   - Renseigner : niveau (L1→M2), filière, photo, téléphone
+   - Mentors : ajouter matières maîtrisées, niveau d'expertise, disponibilités, mode (présentiel/en ligne)
+   - Les mentors sont validés par un administrateur avant de pouvoir recevoir des demandes
+
+2. RECHERCHE DE MENTOR (matching)
+   - Aller dans « Trouver un mentor »
+   - Filtrer par matière, niveau, filière, disponibilité, mode
+   - Le système calcule un score de compatibilité basé sur : matière (35%), niveau adapté (20%), disponibilité (20%), compétence (15%), évaluation (10%)
+   - Consulter le profil détaillé du mentor avant d'envoyer une demande
+
+3. DEMANDES DE MENTORAT
+   - Envoyer une demande au mentor en précisant : matière, difficulté rencontrée, objectif, fréquence souhaitée, durée, mode
+   - Le mentor peut accepter, refuser, ou demander une modification
+   - L'étudiant reçoit une notification de la réponse
+   - Un étudiant peut avoir plusieurs mentors pour des matières différentes
+
+4. MESSAGERIE
+   - Échanger avec son mentor via la messagerie intégrée
+   - La messagerie est limitée aux utilisateurs ayant une demande ou session active
+
+5. PLANIFICATION DES SÉANCES
+   - Programmer une séance avec date, heure, durée, thème, lieu/lien
+   - Statuts : demandée → acceptée → confirmée → en cours → terminée
+   - Rappels automatiques par notification
+
+6. SUIVI ACADÉMIQUE (rapport post-séance)
+   - Après chaque séance, le mentor renseigne : sujet traité, notions abordées, difficultés observées, recommandations, objectif suivant
+   - L'étudiant indique son niveau de compréhension (incompris / partiellement / bien compris / très bien compris)
+   - L'historique de progression est conservé
+
+7. RESSOURCES PÉDAGOGIQUES
+   - Les mentors peuvent partager des PDF, exercices, fiches, liens, annales, corrections
+   - Les ressources sont associées à une matière et un niveau
+   - Certaines ressources sont publiques, d'autres réservées aux étudiants du mentor
+
+8. ÉVALUATION
+   - Après une séance terminée, l'étudiant évalue le mentor sur 5 critères : qualité pédagogique, ponctualité, clarté des explications, disponibilité, satisfaction générale
+   - Note globale calculée automatiquement (1 à 5 étoiles)
+   - Commentaire optionnel
+
+9. NOTIFICATIONS
+   - Notifications internes pour : nouvelles demandes, réponses, nouveaux messages, séances programmées/annulées/terminées, évaluations
+   - Emails optionnels si configurés
+
+10. SIGNALEMENTS
+    - Signaler un comportement ou contenu inapproprié
+    - L'administrateur traite les signalements et peut suspendre des comptes
+
+RÈGLES IMPORTANTES :
+- Un mentor doit être validé par l'admin avant de recevoir des demandes (RG02)
+- Un mentor suspendu ne peut plus recevoir de demandes (RG07)
+- Un étudiant peut avoir plusieurs mentors pour des matières différentes (RG10)
+- Les évaluations ne concernent que les séances terminées (RG05)
 
 Réponds toujours en français, de manière concise et bienveillante. Si la question porte sur un cours précis, encourage l'étudiant à prendre une session avec un mentor dans la matière correspondante.`;
 
@@ -204,51 +256,81 @@ Deno.serve(async (req: Request) => {
 function getFallbackResponse(message: string): string {
   const lower = message.toLowerCase();
 
-  if (lower.includes("bonjour") || lower.includes("salut") || lower.includes("hello")) {
-    return "Bonjour ! Je suis l'assistant MentorUADB. Je peux vous aider à comprendre la plateforme, trouver un mentor, ou organiser une session. Posez-moi votre question !";
+  if (lower.includes("bonjour") || lower.includes("salut") || lower.includes("hello") || lower.includes("bonsoir")) {
+    return "Bonjour ! 👋 Je suis l'assistant MentorUADB. Je peux vous aider à comprendre la plateforme, trouver un mentor, organiser une séance, comprendre le suivi académique ou répondre à vos questions. Comment puis-je vous aider ?";
   }
   if (lower.includes("comment") && (lower.includes("marche") || lower.includes("fonctionne") || lower.includes("utiliser"))) {
-    return "MentorUADB permet de mettre en relation des étudiants avec des mentors. Étapes : 1) Créez un compte. 2) Allez dans « Trouver un mentor » et sélectionnez une matière. 3) Envoyez une demande de session. 4) Le mentor accepte ou refuse. 5) Faites votre session (en ligne ou présentiel) et évaluez-la.";
+    return "MentorUADB fonctionne en 5 étapes : 1) Créez votre compte. 2) Trouvez un mentor via « Trouver un mentor » (filtrez par matière, niveau, disponibilité). 3) Envoyez une demande de mentorat. 4) Une fois accepté, planifiez vos séances et échangez par messagerie. 5) Après chaque séance, le mentor renseigne un suivi et vous évaluez la séance.";
   }
-  if (lower.includes("mentor") && (lower.includes("trouver") || lower.includes("chercher"))) {
-    return "Pour trouver un mentor : allez dans « Trouver un mentor », filtrez par matière ou filière, puis cliquez sur un mentor pour voir son profil et envoyer une demande de session.";
+  if (lower.includes("mentor") && (lower.includes("trouver") || lower.includes("chercher") || lower.includes("recherch"))) {
+    return "Pour trouver un mentor : allez dans « Trouver un mentor », choisissez votre matière, puis filtrez par niveau, filière, disponibilité ou mode (présentiel/en ligne). Le système vous propose les mentors les plus compatibles avec un score calculé automatiquement.";
   }
-  if (lower.includes("session") || lower.includes("rendez") || lower.includes("rdv")) {
-    return "Une session se demande depuis le profil d'un mentor. Choisissez la matière, la date, l'heure, le mode (en ligne/présentiel) et un sujet. Le mentor devra accepter votre demande.";
+  if (lower.includes("demande") && (lower.includes("mentorat") || lower.includes("envoyer") || lower.includes("faire"))) {
+    return "Pour envoyer une demande de mentorat : consultez le profil d'un mentor et cliquez sur « Demander un mentorat ». Décrivez votre difficulté, votre objectif, la fréquence souhaitée (ex : 2 fois/semaine) et la durée. Le mentor recevra une notification et pourra accepter, refuser, ou demander des modifications.";
   }
-  if (lower.includes("matiere") || lower.includes("matières") || lower.includes("cours")) {
-    return "Les matières couvrent les 4 composantes de l'UADB : UFR SATIC (Maths, Physique, Chimie, TIC), UFR SDD (Santé, Environnement), UFR ECOMIJ (Économie, Finance, Management, Droit) et ISFAR (Agriculture, Élevage, Foresterie, Génie Rural). Allez dans « Trouver un mentor » pour voir les matières disponibles.";
+  if (lower.includes("suivi") || lower.includes("rapport") || lower.includes("progression")) {
+    return "Après chaque séance terminée, le mentor renseigne un rapport de suivi : sujet traité, notions abordées, difficultés observées, recommandations et objectif pour la prochaine séance. Vous pouvez aussi indiquer votre propre niveau de compréhension. Cela permet de construire un historique de votre progression.";
   }
-  if (lower.includes("inscription") || lower.includes("inscrire") || lower.includes("compte")) {
+  if (lower.includes("ressource") || lower.includes("document") || lower.includes("pdf") || lower.includes("fiche")) {
+    return "Les mentors peuvent partager des ressources pédagogiques : PDF, exercices, fiches de révision, liens, annales, corrections. Ces ressources sont associées à une matière et un niveau. Certaines sont publiques, d'autres réservées à leurs étudiants.";
+  }
+  if (lower.includes("notification") || lower.includes("alerte") || lower.includes("email")) {
+    return "MentorUADB vous notifie pour : une nouvelle demande reçue, une demande acceptée/refusée, un nouveau message, une séance programmée/annulée/terminée, une nouvelle évaluation. Les notifications apparaissent dans la cloche en haut de l'écran. Des emails peuvent aussi être envoyés si configurés.";
+  }
+  if (lower.includes("signal") || lower.includes("problème") || lower.includes("abus") || lower.includes("plainte")) {
+    return "Vous pouvez signaler un comportement ou contenu inapproprié via le bouton « Signaler » présent sur les profils et les messages. L'équipe d'administration traitera votre signalement. En cas de problème grave, un compte peut être suspendu.";
+  }
+  if (lower.includes("session") || lower.includes("séance") || lower.includes("rendez") || lower.includes("planif")) {
+    return "Une séance est planifiée après qu'une demande de mentorat soit acceptée. Choisissez la date, l'heure, la durée, le thème, et le lieu (ou lien de visio). Les statuts d'une séance sont : demandée → acceptée → confirmée → en cours → terminée. Vous serez notifié à chaque étape.";
+  }
+  if (lower.includes("matiere") || lower.includes("matières") || lower.includes("cours") || lower.includes("module")) {
+    return "Les matières couvrent toutes les composantes de l'UADB : UFR SATIC (Maths, Physique, Chimie, TIC — Algo, Web, Réseaux), UFR SDD (Santé, Environnement), UFR ECOMIJ (Économie, Finance, Management, Droit) et ISFAR (Agriculture, Élevage, Foresterie). Allez dans « Trouver un mentor » pour voir les matières disponibles.";
+  }
+  if (lower.includes("inscription") || lower.includes("inscrire") || lower.includes("compte") || lower.includes("créer")) {
     return "Pour vous inscrire : cliquez sur « Créer un compte », remplissez vos informations (nom, numéro de carte étudiante, niveau, filière, téléphone) et choisissez votre rôle (mentoré, mentor, ou les deux). Un administrateur validera ensuite votre compte.";
   }
   if (lower.includes("devenir") && lower.includes("mentor")) {
-    return "Pour devenir mentor : lors de l'inscription, cochez « Mentor ». Une fois connecté, ajoutez vos matières dans votre profil et définissez vos disponibilités. Les mentorés pourront alors vous envoyer des demandes.";
+    return "Pour devenir mentor : lors de l'inscription (ou dans votre profil), activez le rôle mentor. Ajoutez vos matières maîtrisées avec votre niveau d'expertise, définissez vos disponibilités hebdomadaires et votre mode préféré (présentiel/en ligne). Un administrateur validera votre profil avant que vous puissiez recevoir des demandes.";
   }
-  if (lower.includes("message") || lower.includes("messagerie")) {
-    return "La messagerie permet d'échanger avec un mentor ou mentoré. Allez dans « Messagerie », sélectionnez une conversation ou recherchez un utilisateur pour en démarrer une nouvelle.";
+  if (lower.includes("message") || lower.includes("messagerie") || lower.includes("discuter")) {
+    return "La messagerie permet d'échanger avec votre mentor ou vos mentorés. Elle est disponible uniquement entre utilisateurs ayant une demande ou séance active, pour éviter les abus. Allez dans « Messagerie » pour consulter vos conversations.";
   }
-  if (lower.includes("evaluation") || lower.includes("évaluation") || lower.includes("note")) {
-    return "Après une session terminée, vous pouvez l'évaluer (note sur 5 et commentaire). Les évaluations aident à construire la réputation des mentors et suivre la progression des mentorés.";
+  if (lower.includes("evaluation") || lower.includes("évaluation") || lower.includes("noter") || lower.includes("avis")) {
+    return "Après une séance terminée, vous pouvez évaluer votre mentor sur 5 critères : qualité pédagogique, ponctualité, clarté des explications, disponibilité et satisfaction générale. Une note globale est calculée automatiquement. Vous pouvez aussi laisser un commentaire. Cela aide à améliorer la qualité du mentorat.";
   }
-  if (lower.includes("disponibil") || lower.includes("créneau") || lower.includes("horaire")) {
-    return "Les mentors définissent leurs disponibilités dans leur profil (jours et créneaux horaires). Ces informations aident les mentorés à choisir un mentor disponible.";
+  if (lower.includes("disponibil") || lower.includes("créneau") || lower.includes("horaire") || lower.includes("agenda")) {
+    return "Les mentors définissent leurs disponibilités dans leur profil (jours de la semaine et créneaux horaires). Vous pouvez filtrer les mentors par disponibilité lors de votre recherche. Un mentor peut aussi définir son nombre maximum d'étudiants simultanés.";
   }
-  if (lower.includes("validation") || lower.includes("valide") || lower.includes("admin")) {
-    return "Les comptes sont validés manuellement par les administrateurs pour s'assurer que seuls de vrais étudiants de l'UADB utilisent la plateforme. Une fois validé, vous avez accès à toutes les fonctionnalités.";
+  if (lower.includes("validation") || lower.includes("valide") || lower.includes("en attente") || lower.includes("admin")) {
+    return "Les comptes sont validés manuellement par les administrateurs pour s'assurer que seuls les vrais étudiants et mentors de l'UADB utilisent la plateforme. Une fois validé, vous avez accès à toutes les fonctionnalités. Si votre compte est en attente depuis longtemps, contactez l'administration.";
   }
-  if (lower.includes("uadb") || lower.includes("université") || lower.includes("filière")) {
-    return "L'UADB compte 4 composantes : UFR SATIC (Maths, Physique, Chimie, TIC — Ngoundiane), UFR SDD (Santé, Environnement — Diourbel), UFR ECOMIJ (Économie, Management, Droit — Bambey) et ISFAR (Agriculture, Élevage, Foresterie — Bambey).";
+  if (lower.includes("score") || lower.includes("matching") || lower.includes("compatib") || lower.includes("classement")) {
+    return "Le score de compatibilité est calculé selon le cahier des charges : matière (35%), niveau adapté (20%), disponibilité (20%), compétence du mentor (15%), évaluation (10%). Les sous-scores sont visibles sur le profil de chaque mentor pour plus de transparence.";
   }
-  if (lower.includes("integr") || lower.includes("dériv") || lower.includes("limite") || lower.includes("math")) {
-    return "Pour les questions de mathématiques (intégrales, dérivées, limites), je vous recommande de prendre une session avec un mentor en « Analyse Mathématique » ou « Algèbre Linéaire ». Allez dans « Trouver un mentor » pour en trouver un disponible.";
+  if (lower.includes("uadb") || lower.includes("université") || lower.includes("bamb") || lower.includes("filière") || lower.includes("ufr")) {
+    return "L'UADB (Université Alioune Diop de Bambey) compte 4 composantes : UFR SATIC (Sciences, Technologies — Ngoundiane), UFR SDD (Santé, Développement Durable — Diourbel), UFR ECOMIJ (Économie, Management, Droit — Bambey) et ISFAR (Agriculture, Élevage — Bambey). MentorUADB couvre toutes ces formations.";
   }
-  if (lower.includes("algorithme") || lower.includes("code") || lower.includes("programmation") || lower.includes("bug")) {
-    return "Pour les questions de programmation et d'algorithmique, le mieux est de prendre une session avec un mentor en « Algorithmique et Structures de Données » ou dans le langage qui vous intéresse (C, Java, Python). Allez dans « Trouver un mentor » pour en trouver un.";
+  if (lower.includes("integr") || lower.includes("dériv") || lower.includes("limite") || lower.includes("analyse") || lower.includes("math")) {
+    return "Pour les questions de mathématiques (intégrales, dérivées, limites, algèbre), je vous recommande de trouver un mentor en Analyse Mathématique ou Algèbre Linéaire dans « Trouver un mentor ». Décrivez précisément votre difficulté dans votre demande pour un accompagnement ciblé.";
   }
-  if (lower.includes("merci")) {
-    return "Avec plaisir ! N'hésitez pas si vous avez d'autres questions. Bonne révision !";
+  if (lower.includes("algorithme") || lower.includes("code") || lower.includes("programmation") || lower.includes("bug") || lower.includes("python") || lower.includes("java") || lower.includes("c++")) {
+    return "Pour les questions de programmation et d'algorithmique, trouvez un mentor en Algorithmique ou dans votre langage (C, Java, Python, Web). Décrivez le problème précis (récursivité, complexité, bug...) dans votre demande pour que le mentor puisse bien se préparer.";
+  }
+  if (lower.includes("econom") || lower.includes("compta") || lower.includes("gestion") || lower.includes("management")) {
+    return "Pour les matières de l'UFR ECOMIJ (Économie, Comptabilité, Management, Droit), vous trouverez des mentors dans « Trouver un mentor » en filtrant par filière ECOMIJ.";
+  }
+  if (lower.includes("santé") || lower.includes("sante") || lower.includes("médecine") || lower.includes("biologie")) {
+    return "Pour les matières de l'UFR SDD (Santé, Environnement, Biologie), vous trouverez des mentors en filtrant par filière SDD dans « Trouver un mentor ».";
+  }
+  if (lower.includes("agricul") || lower.includes("elevage") || lower.includes("agronomi") || lower.includes("isfar")) {
+    return "Pour les matières de l'ISFAR (Agronomie, Élevage, Foresterie, Génie Rural), filtrez par filière ISFAR dans « Trouver un mentor ».";
+  }
+  if (lower.includes("merci") || lower.includes("super") || lower.includes("parfait") || lower.includes("excellent")) {
+    return "Avec plaisir ! 😊 N'hésitez pas si vous avez d'autres questions. Bonne révision et bon courage dans vos études !";
+  }
+  if (lower.includes("limite") && lower.includes("étudiant") || lower.includes("nb max") || lower.includes("nombre max")) {
+    return "Un mentor peut définir le nombre maximum d'étudiants qu'il accompagne simultanément (entre 1 et 20). Cela évite la surcharge des mentors et garantit une meilleure qualité d'accompagnement.";
   }
 
-  return "Je ne suis pas sûr de pouvoir répondre à cette question précise. Je vous recommande de consulter un mentor dans « Trouver un mentor » pour une aide personnalisée, ou de reformuler votre question sur le fonctionnement de la plateforme.";
+  return "Je ne suis pas sûr de pouvoir répondre précisément à cette question. Je vous recommande de consulter un mentor dans « Trouver un mentor » pour une aide personnalisée, ou de reformuler votre question sur le fonctionnement de la plateforme MentorUADB.";
 }

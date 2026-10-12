@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" fill="none">
+  <!-- Cercle de fond vert foncé -->
+  <circle cx="100" cy="100" r="100" fill="#1a5c2a"/>
+
+  <!-- Livre ouvert (base) -->
+  <rect x="42" y="105" width="53" height="38" rx="3" fill="#ffffff" opacity="0.95"/>
+  <rect x="105" y="105" width="53" height="38" rx="3" fill="#ffffff" opacity="0.85"/>
+  <!-- Reliure centrale -->
+  <rect x="96" y="103" width="8" height="42" rx="2" fill="#f0c040"/>
+
+  <!-- Pages lignes gauche -->
+  <line x1="52" y1="118" x2="86" y2="118" stroke="#1a5c2a" stroke-width="2.2" stroke-linecap="round"/>
+  <line x1="52" y1="126" x2="86" y2="126" stroke="#1a5c2a" stroke-width="2.2" stroke-linecap="round"/>
+  <line x1="52" y1="134" x2="86" y2="134" stroke="#1a5c2a" stroke-width="2.2" stroke-linecap="round"/>
+
+  <!-- Pages lignes droite -->
+  <line x1="114" y1="118" x2="148" y2="118" stroke="#1a5c2a" stroke-width="2.2" stroke-linecap="round"/>
+  <line x1="114" y1="126" x2="148" y2="126" stroke="#1a5c2a" stroke-width="2.2" stroke-linecap="round"/>
+  <line x1="114" y1="134" x2="148" y2="134" stroke="#1a5c2a" stroke-width="2.2" stroke-linecap="round"/>
+
+  <!-- Flambeau — manche -->
+  <rect x="94" y="52" width="12" height="56" rx="4" fill="#f0c040"/>
+
+  <!-- Flambeau — flamme -->
+  <ellipse cx="100" cy="46" rx="10" ry="14" fill="#f97316"/>
+  <ellipse cx="100" cy="42" rx="6" ry="10" fill="#fef08a"/>
+  <ellipse cx="100" cy="39" rx="3" ry="6" fill="#ffffff" opacity="0.7"/>
+
+  <!-- Texte UADB -->
+  <text x="100" y="172" font-family="Georgia, 'Times New Roman', serif" font-size="22" font-weight="bold" fill="#ffffff" text-anchor="middle" letter-spacing="3">UADB</text>
+</svg>
